@@ -4,6 +4,7 @@ services:
   # 1. The Database Service
   db:
     image: mysql:5.7
+    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: tododb
@@ -17,6 +18,7 @@ services:
   # 2. Your Python Application
   web:
     build: .
+    restart: always
     ports:
       - "5000:5000"
     depends_on:
