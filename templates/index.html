@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto-Healing To-Do App</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 40px auto; text-align: center; background-color: #f4f4f9; }
+        h1 { color: #333; }
+        input { padding: 10px; width: 70%; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        ul { list-style: none; padding: 0; }
+        li { background: white; border-bottom: 1px solid #ddd; padding: 10px; text-align: left; margin-top: 5px; }
+        .status { margin-top: 20px; font-size: 0.9em; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>📝 My Auto-Healing To-Do List</h1>
+    
+    <div>
+        <input type="text" id="taskInput" placeholder="Add a new task...">
+        <button onclick="addTask()">Add</button>
+    </div>
+
+    <ul id="todoList"></ul>
+
+    <div class="status">
+        Backend Status: <span id="statusText" style="color: orange;">Checking...</span>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:5000";
+
+        // Fetch tasks on load
+        window.onload = function() {
+            fetchTodos();
+            checkHealth();
+        };
+
+        async function fetchTodos() {
+            try {
+                const response = await fetch(`${API_URL}/todos`);
+                const data = await response.json();
+                const list = document.getElementById('todoList');
+                list.innerHTML = "";
+                data.forEach(task => {
+                    const li = document.createElement('li');
+                    li.textContent = task.content;
+                    list.appendChild(li);
+                });
+            } catch (error) {
+                console.error("Error fetching tasks:", error);
+            }
+        }
+
+        async function addTask() {
+            const input = document.getElementById('taskInput');
+            const item = input.value;
+            if (!item) return;
+
+            await fetch(`${API_URL}/todos`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ item: item })
+            });
+
+            input.value = "";
+            fetchTodos();
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                if (response.ok) {
+                    document.getElementById("statusText").innerText = "Online & Healthy ✅";
+                    document.getElementById("statusText").style.color = "green";
+                } else {
+                    document.getElementById("statusText").innerText = "Unhealthy ❌";
+                    document.getElementById("statusText").style.color = "red";
+                }
+            } catch (e) {
+                document.getElementById("statusText").innerText = "Disconnected ⚠️";
+                document.getElementById("statusText").style.color = "red";
+            }
+        }
+    </script>
+</body>
+</html>

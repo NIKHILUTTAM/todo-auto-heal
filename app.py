@@ -1,6 +1,6 @@
 import os
 import time
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template # <--- Add render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError
 
@@ -36,7 +36,8 @@ def wait_for_db():
 
 @app.route('/')
 def home():
-    return jsonify({"message": "To-Do App with MySQL is Running!", "version": "v2.0"})
+    # Instead of returning JSON, we return the HTML file
+    return render_template('index.html')
 
 @app.route('/health')
 def health():
