@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  # 1. The Database Service
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: tododb
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # 2. Your Python Application
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # 'db' here refers to the service name above
+      DATABASE_URL: mysql+pymysql://root:root@db/tododb
