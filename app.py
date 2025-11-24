@@ -61,6 +61,16 @@ def add_todo():
     db.session.commit()
     return jsonify({"message": "Added", "item": new_todo.to_dict()}), 201
 
+@app.route('/todos/<int:id>', methods=['DELETE'])
+def delete_todo(id):
+    task = Todo.query.get(id)
+    if task:
+        db.session.delete(task)
+        db.session.commit()
+        return jsonify({"message": "Task deleted"}), 200
+    else:
+        return jsonify({"error": "Task not found"}), 404
+
 if __name__ == '__main__':
     wait_for_db() # Wait for MySQL before starting
     app.run(host='0.0.0.0', port=5000)
