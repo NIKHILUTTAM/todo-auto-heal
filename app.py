@@ -1,17 +1,31 @@
 import os
 import time
-from flask import Flask, jsonify, request, render_template # <--- Add render_template
+from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError
 
+# 1. Initialize Flask FIRST
 app = Flask(__name__)
 
-# Configure Database Connection
-# format: mysql+pymysql://user:password@hostname/databasename
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'mysql+pymysql://root:root@db/tododb')
+# 2. Logic to fix the Database URL
+db_url = os.getenv('DATABASE_URL')
+
+# FIX: Render provides 'postgres://' but SQLAlchemy needs 'postgresql://'
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+# Fallback for local testing if no env var exists (Docker Compose)
+if not db_url:
+    db_url = 'mysql+pymysql://root:root@db/tododb'
+
+# 3. Apply the Configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# 4. Initialize the Database
 db = SQLAlchemy(app)
+
+# --- THE REST OF YOUR CODE STAYS THE SAME ---
 
 # Define the Table Structure
 class Todo(db.Model):
@@ -21,7 +35,7 @@ class Todo(db.Model):
     def to_dict(self):
         return {"id": self.id, "content": self.content}
 
-# Retry logic to wait for MySQL to be ready
+# Retry logic to wait for DB to be ready
 def wait_for_db():
     with app.app_context():
         for _ in range(10):
@@ -36,12 +50,10 @@ def wait_for_db():
 
 @app.route('/')
 def home():
-    # Instead of returning JSON, we return the HTML file
     return render_template('index.html')
 
 @app.route('/health')
 def health():
-    # Check if DB is actually reachable
     try:
         db.session.execute(db.text('SELECT 1'))
         return jsonify({"status": "healthy", "db": "connected"}), 200
@@ -72,5 +84,5 @@ def delete_todo(id):
         return jsonify({"error": "Task not found"}), 404
 
 if __name__ == '__main__':
-    wait_for_db() # Wait for MySQL before starting
+    wait_for_db() 
     app.run(host='0.0.0.0', port=5000)
