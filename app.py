@@ -4,26 +4,16 @@ from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError
 
-# 1. Initialize Flask
 app = Flask(__name__)
 
-# 2. Configure Database
-# Get the URL from the environment
-db_url = os.getenv('DATABASE_URL')
+# --- DATABASE CONFIGURATION ---
+# Railway will provide a DATABASE_URL. 
+# If not found, it falls back to the local Docker Compose URL.
+db_url = os.getenv('DATABASE_URL', 'mysql+pymysql://root:root@db/tododb')
 
-# FIX: Render provides 'postgres://' but SQLAlchemy needs 'postgresql://'
-if db_url and db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-
-# Fallback for local testing (Docker Compose) if no env var exists
-if not db_url:
-    db_url = 'mysql+pymysql://root:root@db/tododb'
-
-# Apply the config
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 3. Initialize Database
 db = SQLAlchemy(app)
 
 # --- MODELS ---
@@ -34,27 +24,17 @@ class Todo(db.Model):
     def to_dict(self):
         return {"id": self.id, "content": self.content}
 
-# --- HELPER FUNCTIONS ---
+# --- HELPERS ---
 def wait_for_db():
     with app.app_context():
-        # Optimization: Don't wait if we are on Render (Postgres is usually ready)
-        if 'postgres' in str(app.config['SQLALCHEMY_DATABASE_URI']):
+        # Retry loop to wait for MySQL to start
+        for _ in range(15):
             try:
                 db.create_all()
-                print("✅ Database connected (Render)")
+                print("✅ Database connected!")
                 return
             except Exception as e:
-                print(f"❌ Error connecting to Render DB: {e}")
-                return
-
-        # Loop for Local MySQL
-        for _ in range(10):
-            try:
-                db.create_all()
-                print("✅ Database connected and tables created!")
-                return
-            except OperationalError:
-                print("⏳ Database not ready yet, waiting...")
+                print(f"⏳ Waiting for Database... ({str(e)})")
                 time.sleep(3)
         print("❌ Could not connect to Database.")
 
@@ -66,12 +46,9 @@ def home():
 @app.route('/health')
 def health():
     try:
-        # Simple query to check connection
         db.session.execute(db.text('SELECT 1'))
         return jsonify({"status": "healthy", "db": "connected"}), 200
     except Exception as e:
-        # Print error to logs so we can see it in Render Dashboard
-        print(f"Health Check Failed: {e}")
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 @app.route('/todos', methods=['GET'])
