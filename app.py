@@ -4,30 +4,29 @@ from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError
 
-# 1. Initialize Flask FIRST
+# 1. Initialize Flask
 app = Flask(__name__)
 
-# 2. Logic to fix the Database URL
+# 2. Configure Database
+# Get the URL from the environment
 db_url = os.getenv('DATABASE_URL')
 
 # FIX: Render provides 'postgres://' but SQLAlchemy needs 'postgresql://'
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-# Fallback for local testing if no env var exists (Docker Compose)
+# Fallback for local testing (Docker Compose) if no env var exists
 if not db_url:
     db_url = 'mysql+pymysql://root:root@db/tododb'
 
-# 3. Apply the Configuration
+# Apply the config
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 4. Initialize the Database
+# 3. Initialize Database
 db = SQLAlchemy(app)
 
-# --- THE REST OF YOUR CODE STAYS THE SAME ---
-
-# Define the Table Structure
+# --- MODELS ---
 class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(200), nullable=False)
@@ -35,12 +34,23 @@ class Todo(db.Model):
     def to_dict(self):
         return {"id": self.id, "content": self.content}
 
-# Retry logic to wait for DB to be ready
+# --- HELPER FUNCTIONS ---
 def wait_for_db():
     with app.app_context():
+        # Optimization: Don't wait if we are on Render (Postgres is usually ready)
+        if 'postgres' in str(app.config['SQLALCHEMY_DATABASE_URI']):
+            try:
+                db.create_all()
+                print("✅ Database connected (Render)")
+                return
+            except Exception as e:
+                print(f"❌ Error connecting to Render DB: {e}")
+                return
+
+        # Loop for Local MySQL
         for _ in range(10):
             try:
-                db.create_all() # Create tables if they don't exist
+                db.create_all()
                 print("✅ Database connected and tables created!")
                 return
             except OperationalError:
@@ -48,6 +58,7 @@ def wait_for_db():
                 time.sleep(3)
         print("❌ Could not connect to Database.")
 
+# --- ROUTES ---
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -55,9 +66,12 @@ def home():
 @app.route('/health')
 def health():
     try:
+        # Simple query to check connection
         db.session.execute(db.text('SELECT 1'))
         return jsonify({"status": "healthy", "db": "connected"}), 200
     except Exception as e:
+        # Print error to logs so we can see it in Render Dashboard
+        print(f"Health Check Failed: {e}")
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 @app.route('/todos', methods=['GET'])
@@ -84,5 +98,5 @@ def delete_todo(id):
         return jsonify({"error": "Task not found"}), 404
 
 if __name__ == '__main__':
-    wait_for_db() 
+    wait_for_db()
     app.run(host='0.0.0.0', port=5000)
