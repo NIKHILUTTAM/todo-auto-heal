@@ -1,5 +1,7 @@
 import os
 import time
+import pymysql
+pymysql.install_as_MySQLdb() # <--- THIS IS THE MAGIC LINE
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError
