@@ -1,46 +1,38 @@
 import os
-import time
 import pymysql
-pymysql.install_as_MySQLdb() # Required for Railway MySQL connection
+pymysql.install_as_MySQLdb() # Required for Vercel to talk to MySQL
 
 from flask import Flask, jsonify, request, render_template
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import OperationalError
 
 app = Flask(__name__)
 
-# --- DATABASE CONFIGURATION ---
+# --- DATABASE CONFIG ---
+# Vercel needs the Public URL from Railway
 db_url = os.getenv('DATABASE_URL')
 
-# FIX: Railway sends 'mysql://' but Python needs 'mysql+pymysql://'
+# Fix URL format for SQLAlchemy (Railway gives 'mysql://', we need 'mysql+pymysql://')
 if db_url and db_url.startswith("mysql://"):
     db_url = db_url.replace("mysql://", "mysql+pymysql://", 1)
-
-# Fallback for local Docker Compose
-if not db_url:
-    db_url = 'mysql+pymysql://root:root@db/tododb'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Serverless Optimization: Recycle connections to prevent "Lost Connection" errors
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_recycle": 280,
+    "pool_pre_ping": True
+}
+
 db = SQLAlchemy(app)
 
-# --- DATABASE MODEL ---
+# --- MODEL ---
 class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.String(200), nullable=False)
 
     def to_dict(self):
         return {"id": self.id, "content": self.content}
-
-# --- CRITICAL FIX: AUTO-CREATE TABLES ---
-# This runs immediately when Gunicorn loads the app (Fixes missing tables on Cloud)
-with app.app_context():
-    try:
-        db.create_all()
-        print("✅ Database tables checked/created successfully!")
-    except Exception as e:
-        print(f"⚠️ Warning during table creation: {e}")
 
 # --- ROUTES ---
 @app.route('/')
@@ -50,14 +42,19 @@ def home():
 @app.route('/health')
 def health():
     try:
-        # Simple query to verify connection
+        # Simple query to check connection
         db.session.execute(db.text('SELECT 1'))
-        return jsonify({"status": "healthy", "db": "connected"}), 200
+        return jsonify({"status": "healthy", "platform": "Vercel Serverless"}), 200
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 @app.route('/todos', methods=['GET'])
 def get_todos():
+    # Serverless Trick: Create tables on the fly if they don't exist yet
+    # (Because we don't have a startup script in Serverless)
+    with app.app_context():
+        db.create_all()
+        
     todos = Todo.query.all()
     return jsonify([t.to_dict() for t in todos])
 
@@ -79,7 +76,4 @@ def delete_todo(id):
     else:
         return jsonify({"error": "Task not found"}), 404
 
-if __name__ == '__main__':
-    # This block only runs locally when you type 'python app.py'
-    # Gunicorn ignores this, which is why we moved db.create_all() up above.
-    app.run(host='0.0.0.0', port=5000)
+# Note: We removed "if __name__ == '__main__': app.run()" because Vercel controls the startup.

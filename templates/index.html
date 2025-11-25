@@ -120,11 +120,13 @@
                 if (response.ok) {
                     document.getElementById("statusText").innerText = "Online & Healthy ✅";
                     document.getElementById("statusText").style.color = "green";
-                } else {
+                }
+                else {
                     document.getElementById("statusText").innerText = "Unhealthy ❌";
                     document.getElementById("statusText").style.color = "red";
                 }
-            } catch (e) {
+            } 
+            catch (e) {
                 document.getElementById("statusText").innerText = "Disconnected ⚠️";
                 document.getElementById("statusText").style.color = "red";
             }
